@@ -1,0 +1,6 @@
+{
+  "name": "Museu Virtual de Fósseis",
+  "description": "Um museu interativo onde grupos de alunos carregam as suas apresentações de fósseis com exploração 3D, fichas científicas, quizzes e mapas geológicos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

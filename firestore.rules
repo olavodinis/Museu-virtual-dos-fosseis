@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validates an Exhibit document schema
+    function isValidExhibit(data) {
+      return data.fossilName is string && data.fossilName.size() >= 2 && data.fossilName.size() <= 100
+        && data.groupName is string && data.groupName.size() >= 2 && data.groupName.size() <= 100
+        && data.geologicEra is string && (data.geologicEra == 'Paleozoico' || data.geologicEra == 'Mesozoico' || data.geologicEra == 'Cenozoico')
+        && data.age is string && data.age.size() <= 100
+        && data.location is string && data.location.size() <= 100
+        && data.description is string && data.description.size() <= 3000
+        && data.fossilType is string && (data.fossilType == 'AMMONITE' || data.fossilType == 'TRILOBITE' || data.fossilType == 'MEGALODON_TOOTH' || data.fossilType == 'LEAF_IMPRINT' || data.fossilType == 'AMBER_INSECT' || data.fossilType == 'DINOSAUR_BONE')
+        && data.color is string && data.color.size() <= 7
+        && data.wearFactor is number && data.wearFactor >= 0.0 && data.wearFactor <= 1.0
+        && data.size is number && data.size >= 0.1 && data.size <= 5.0
+        && data.ridges is number && data.ridges >= 1.0 && data.ridges <= 100.0
+        && data.scientificFacts is list && data.scientificFacts.size() <= 20
+        && data.fossilizationProcess is list && data.fossilizationProcess.size() <= 20
+        && data.curiosities is list && data.curiosities.size() <= 20
+        && data.quizQuestions is list && data.quizQuestions.size() <= 10
+        && data.likesCount is int && data.likesCount >= 0
+        && data.createdBy is string && data.createdBy.size() <= 128
+        && data.createdAt is timestamp;
+    }
+
+    match /exhibits/{exhibitId} {
+      // Anyone can read and list exhibits to view the museum
+      allow get, list: if true;
+
+      // Authenticated users can create exhibits they own
+      allow create: if isSignedIn()
+        && isValidId(exhibitId)
+        && isValidExhibit(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().likesCount == 0
+        && incoming().createdAt == request.time;
+
+      // Two types of updates:
+      // 1. Creator editing their exhibit (except immutable fields like createdBy, createdAt)
+      // 2. Visitors increments/decrements likesCount
+      allow update: if isSignedIn()
+        && isValidExhibit(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && (
+          // Case 1: Creator editing
+          (request.auth.uid == existing().createdBy && incoming().diff(existing()).affectedKeys().hasOnly(['fossilName', 'groupName', 'geologicEra', 'age', 'location', 'description', 'fossilType', 'color', 'wearFactor', 'size', 'ridges', 'scientificFacts', 'fossilizationProcess', 'curiosities', 'quizQuestions'])) ||
+          // Case 2: Visitor liking
+          (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount']))
+        );
+
+      // Creator can delete their own exhibit
+      allow delete: if isSignedIn()
+        && existing().createdBy == request.auth.uid;
+    }
+  }
+}

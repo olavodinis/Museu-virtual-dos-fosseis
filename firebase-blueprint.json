@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Exhibit": {
+      "title": "Fossil Exhibit",
+      "description": "An interactive fossil presentation uploaded by a student group, containing procedural 3D properties, scientific facts, fossilization details, and a visitor quiz.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique document ID"
+        },
+        "fossilName": {
+          "type": "string",
+          "description": "Name of the fossil specimen"
+        },
+        "groupName": {
+          "type": "string",
+          "description": "Name of the student group responsible for the exhibit"
+        },
+        "geologicEra": {
+          "type": "string",
+          "enum": ["Paleozoico", "Mesozoico", "Cenozoico"],
+          "description": "The geological era of the specimen"
+        },
+        "age": {
+          "type": "string",
+          "description": "The estimated age, e.g., '250 milhões de anos'"
+        },
+        "location": {
+          "type": "string",
+          "description": "The location/country where the fossil was found"
+        },
+        "description": {
+          "type": "string",
+          "description": "A scientific summary description of the fossil"
+        },
+        "fossilType": {
+          "type": "string",
+          "enum": ["AMMONITE", "TRILOBITE", "MEGALODON_TOOTH", "LEAF_IMPRINT", "AMBER_INSECT", "DINOSAUR_BONE"],
+          "description": "The procedural 3D model generator category"
+        },
+        "color": {
+          "type": "string",
+          "description": "Hexadecimal color representing the fossil stone/material color"
+        },
+        "wearFactor": {
+          "type": "number",
+          "description": "Silt/wear percentage (erosion), from 0.0 to 1.0"
+        },
+        "size": {
+          "type": "number",
+          "description": "Dimensional scale of the model, from 0.5 to 2.0"
+        },
+        "ridges": {
+          "type": "number",
+          "description": "Elegance/ridges multiplier, from 5.0 to 40.0"
+        },
+        "scientificFacts": {
+          "type": "array",
+          "description": "A list of bullet points containing verified scientific facts about the specimen"
+        },
+        "fossilizationProcess": {
+          "type": "array",
+          "description": "A step-by-step description of the fossil's preservation process"
+        },
+        "curiosities": {
+          "type": "array",
+          "description": "Interesting or quirky facts to captivate the museum visitors"
+        },
+        "quizQuestions": {
+          "type": "array",
+          "description": "Multiple choice quiz created by students, each element has a question, options, answerIndex, and explanation"
+        },
+        "likesCount": {
+          "type": "number",
+          "description": "Accumulated visitor appreciation count"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the student group curator who uploaded this exhibit"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the exhibit was registered"
+        }
+      },
+      "required": [
+        "fossilName",
+        "groupName",
+        "geologicEra",
+        "age",
+        "location",
+        "description",
+        "fossilType",
+        "color",
+        "wearFactor",
+        "scientificFacts",
+        "fossilizationProcess",
+        "curiosities",
+        "quizQuestions",
+        "likesCount",
+        "createdBy",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/exhibits/{exhibitId}": {
+      "schema": "Exhibit",
+      "description": "Individual interactive fossil displays"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-art-gold: #C2A26E;
+  --color-art-bg: #0F1110;
+  --color-art-panel: #141615;
+  --color-art-card: #1A1C1B;
+}
+
+@layer utilities {
+  .animate-spin-slow {
+    animation: spin 20s linear infinite;
+  }
+}
