@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 
@@ -11,15 +10,26 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Initialize Gemini Client Lazily to avoid crashing if GEMINI_API_KEY is not defined
+let aiClient: GoogleGenAI | null = null;
+function getAIClient() {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY is not set. Curation will fall back to local client-side generator.");
+      return null;
     }
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
-});
+  return aiClient;
+}
 
 // API Routes
 app.get('/api/health', (req, res) => {
@@ -34,11 +44,16 @@ app.post('/api/curate', async (req, res) => {
     return res.status(400).json({ error: 'Nome do fóssil inválido ou ausente.' });
   }
 
+  const ai = getAIClient();
+  if (!ai) {
+    return res.status(503).json({ error: 'O serviço de Paleontologia por IA não está configurado no servidor. O cliente ativará a simulação científica interativa!' });
+  }
+
   try {
     const prompt = `Gera um conteúdo científico detalhado e interativo para a ficha de um fóssil chamado "${fossilName}" em língua portuguesa (Portugal). Configura as propriedades 3D procedimentais de forma a aproximar o espécime ao seu aspeto real.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         systemInstruction: 'És um paleontólogo sénior e curador de museus nacionais especializado em fósseis e geologia. Fornece informações estritamente fidedignas e cientificamente exatas em português de Portugal. Escolhe com rigor geocientífico o tipo de fósseis procedimental adequado entre as seguintes categorias: AMMONITE, TRILOBITE, MEGALODON_TOOTH, LEAF_IMPRINT, AMBER_INSECT, DINOSAUR_BONE.',
@@ -113,31 +128,29 @@ app.post('/api/curate', async (req, res) => {
     res.json(parsedData);
   } catch (error) {
     console.error('Erro na curadoria IA:', error);
-    res.status(500).json({ error: 'Erro ao gerar curadoria científica via IA. Tente preencher manualmente ou tente novamente.' });
+    res.status(500).json({ error: 'Erro ao gerar curadoria científica via IA. Tente preencher manualmente.' });
   }
 });
 
-// Vite Integration & Static Serving
-async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-    console.log('Vite middleware mounted in Development mode');
+// Serve static index.html and assets
+const isProd = process.env.NODE_ENV === 'production';
+const projectRoot = process.cwd();
+
+// Serve the root folder for local assets/styles if needed
+app.use(express.static(projectRoot));
+
+app.get('*', (req, res) => {
+  const distIndex = path.join(projectRoot, 'dist', 'index.html');
+  const rootIndex = path.join(projectRoot, 'index.html');
+  
+  if (isProd) {
+    res.sendFile(distIndex);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-    console.log('Serving production static files from dist/');
+    res.sendFile(rootIndex);
   }
+});
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
 
-startServer();

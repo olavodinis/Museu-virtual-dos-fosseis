@@ -1,13 +1,1288 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>Museu Virtual dos Fósseis - Exposição Interativa</title>
+
+    <!-- CDNs -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gold: '#C2A26E',
+              dark: '#0f1110',
+              cardDark: '#141615',
+            },
+            fontFamily: {
+              serif: ['Playfair Display', 'Georgia', 'serif'],
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+            }
+          }
+        }
+      }
+    </script>
+    <style type="text/css">
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+      body {
+        background-color: #0f1110;
+        color: #e2e8f0;
+        font-family: 'Inter', sans-serif;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fadeIn {
+        animation: fadeIn 0.4s ease-out forwards;
+      }
+      @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .animate-spin-slow {
+        animation: spin-slow 22s linear infinite;
+      }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #0f1110; }
+      ::-webkit-scrollbar-thumb { background: #c2a26e40; border-radius: 3px; }
+    </style>
   </head>
-  <body>
+  <body class="min-h-screen bg-[#0f1110] selection:bg-[#c2a26e]/30 selection:text-white">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef, useMemo } = React;
+
+      // Firebase Config
+      const firebaseConfig = {
+        projectId: "fleet-quarter-1rtgb",
+        appId: "1:786137153703:web:d4901957a0eb4383935b82",
+        apiKey: "AIzaSyCLKZgw29Mcd2IMU_p3AKHbxQ3MtMhUKwM",
+        authDomain: "fleet-quarter-1rtgb.firebaseapp.com",
+        firestoreDatabaseId: "ai-studio-museuvirtualdefs-baf386f1-6708-42b2-a348-14e60129a5c6",
+        storageBucket: "fleet-quarter-1rtgb.firebasestorage.app",
+        messagingSenderId: "786137153703"
+      };
+
+      // Seeding Data
+      const PRELOADED_EXHIBITS = [
+        {
+          id: "fossil-ammonite",
+          fossilName: "Amonite Gigante (Ancyloceras)",
+          groupName: "Curadoria do Museu",
+          geologicEra: "Mesozoico",
+          age: "115 milhões de anos (Cretáceo)",
+          location: "Svalbard, Noruega",
+          description: "Este magnífico espécime exibe a concha em espiral característica dos amonites, moluscos cefalópodes marinhos extintos. A concha servia de proteção e flutuabilidade na coluna de água.",
+          fossilType: "AMMONITE",
+          color: "#a38d75",
+          wearFactor: 0.15,
+          size: 1.2,
+          ridges: 24,
+          scientificFacts: [
+            "Os amonites são parentes distantes do polvo e lula modernos, mas possuíam uma concha rígida externa.",
+            "Eram animais nectónicos carnívoros que capturavam presas com tentáculos.",
+            "A sua rápida evolução torna-os excelentes fósseis guia geológicos.",
+            "A extinção dos amonites ocorreu em simultâneo com a dos dinossauros há 66 Ma."
+          ],
+          fossilizationProcess: [
+            "Morte do amonite e deposição da concha no fundo lodoso do oceano.",
+            "Rápido soterramento por sedimentos que excluíram o oxigénio.",
+            "Infiltração de água rica em minerais nas câmaras vazias.",
+            "Substituição molecular gradual por minerais como ferro e sílica.",
+            "Erosão e levantamento tectónico expuseram o fóssil nas falésias árticas."
+          ],
+          curiosities: [
+            "O nome deriva do deus egípcio Amon, representado com cornos de carneiro em espiral.",
+            "Algumas conchas adquirem iridescência colorida (Amolita) parecendo arco-íris.",
+            "As suturas na concha fortaleciam-na contra as enormes pressões subaquáticas."
+          ],
+          quizQuestions: [
+            {
+              question: "A que classe de animais pertenciam os amonites?",
+              options: ["Répteis Marinhos", "Cefalópodes (Moluscos)", "Peixes Cartilagíneos", "Crustáceos"],
+              answerIndex: 1,
+              explanation: "Os amonites eram moluscos cefalópodes marinhos, tal como a lula e o náutilo modernos."
+            },
+            {
+              question: "Qual era a principal função das câmaras da concha do amonite?",
+              options: ["Armazenar comida para o inverno", "Regular a flutuabilidade na água", "Incubar os ovos", "Combater parasitas"],
+              answerIndex: 1,
+              explanation: "As câmaras internas eram usadas para controlar o gás e flutuar na coluna de água."
+            }
+          ],
+          likesCount: 34,
+          createdBy: "system",
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: "fossil-trilobite",
+          fossilName: "Trilobite (Elrathia kingii)",
+          groupName: "Grupo Científico do Paleolítico",
+          geologicEra: "Paleozoico",
+          age: "505 milhões de anos (Câmbrico)",
+          location: "Utah, Estados Unidos",
+          description: "Artrópodes marinhos primitivos que dominaram os oceanos por 250 milhões de anos. Este fóssil exibe uma divisão tripartida perfeita e olhos complexos de calcite pura.",
+          fossilType: "TRILOBITE",
+          color: "#544e45",
+          wearFactor: 0.3,
+          size: 1.0,
+          ridges: 14,
+          scientificFacts: [
+            "Foram os primeiros animais conhecidos a desenvolver olhos compostos de lentes minerais.",
+            "Pertencem ao filo dos artrópodes, partilhando parentesco com os caranguejos-ferradura.",
+            "Existiram mais de 20.000 espécies de trilobites com incríveis adaptações.",
+            "Extinguiram-se definitivamente na grande extinção do Pérmico-Triássico."
+          ],
+          fossilizationProcess: [
+            "Muda do exosqueleto ou morte no leito marinho.",
+            "Soterramento rápido sob poeiras e lamas de tempestades oceânicas.",
+            "Decomposição das partes corporais moles sob sedimentos finos.",
+            "Petrificação gradual do exosqueleto mineralizado nas placas terrestres.",
+            "Dobramentos tectónicos expuseram as placas de xisto à superfície."
+          ],
+          curiosities: [
+            "Podiam enrolar-se como 'bichos-de-conta' modernos para se defenderem de predadores.",
+            "Os nativos americanos de Utah usavam estes fósseis como amuletos protetores.",
+            "Algumas espécies tinham espinhos gigantescos com o dobro do tamanho corporal."
+          ],
+          quizQuestions: [
+            {
+              question: "De onde provém o nome 'Trilobite'?",
+              options: ["Viveram em três mares distintos", "Três lobos longitudinais do corpo", "Três pernas principais", "Três olhos compostos"],
+              answerIndex: 1,
+              explanation: "Trilobite significa 'três lobos', dividindo-se em lobo pleural esquerdo, lobo axial médio e lobo pleural direito."
+            }
+          ],
+          likesCount: 28,
+          createdBy: "system",
+          createdAt: new Date().toISOString()
+        }
+      ];
+
+      // Local Fallback Curations
+      function generateClientSideCuration(fossilName) {
+        const nameLower = fossilName.toLowerCase();
+        if (nameLower.includes('amoni') || nameLower.includes('concha') || nameLower.includes('espiral')) {
+          return PRELOADED_EXHIBITS[0];
+        }
+        if (nameLower.includes('trilo') || nameLower.includes('artro') || nameLower.includes('bicho')) {
+          return PRELOADED_EXHIBITS[1];
+        }
+        if (nameLower.includes('megalo') || nameLower.includes('tubar') || nameLower.includes('dente')) {
+          return {
+            fossilName: "Dente de Megalodonte (Otodus)",
+            geologicEra: "Cenozoico",
+            age: "15 milhões de anos (Mioceno)",
+            location: "Carolina do Sul, EUA",
+            description: "Este dente gigante pertenceu ao maior predador marinho do planeta, exibindo serrilhas laterais afiadas e mineralização de fosfato negra.",
+            fossilType: "MEGALODON_TOOTH",
+            color: "#2d2a26",
+            wearFactor: 0.1,
+            size: 1.5,
+            ridges: 32,
+            scientificFacts: [
+              "O Megalodonte atingia até 18 metros de comprimento.",
+              "Os dentes são fósseis comuns por caírem naturalmente na caça.",
+              "Sua mordida era três vezes mais potente que a do T-Rex.",
+              "Sua dieta principal incluía baleias pré-históricas e golfinhos."
+            ],
+            fossilizationProcess: [
+              "Perda do dente durante uma caçada no mar raso.",
+              "Soterramento em depósitos marinhos arenosos ricos em ferro.",
+              "Substituição química gradual do esmalte por fosfato e manganês.",
+              "Compactação e endurecimento ao longo de milhões de anos.",
+              "Erosão natural costeira expôs os dentes nas praias fluviais."
+            ],
+            curiosities: [
+              "Na antiguidade eram tidos como pontas de línguas de dragões petrificadas.",
+              "O maior dente descoberto ultrapassa os 18 centímetros.",
+              "A extinção deveu-se ao arrefecimento global e declínio de presas."
+            ],
+            quizQuestions: [
+              {
+                question: "De que material era constituído o esqueleto do Megalodonte?",
+                options: ["Osso rígido", "Cartilagem flexível", "Sílica cristalina", "Placas de queratina"],
+                answerIndex: 1,
+                explanation: "Tal como os tubarões modernos, o seu esqueleto era cartilagíneo, desintegrando-se sem fossilizar."
+              }
+            ]
+          };
+        }
+        if (nameLower.includes('inseto') || nameLower.includes('ambar') || nameLower.includes('resina')) {
+          return {
+            fossilName: "Inseto em Âmbar Báltico",
+            geologicEra: "Cenozoico",
+            age: "44 milhões de anos (Eoceno)",
+            location: "Região do Báltico, Europa",
+            description: "Uma formiga pré-histórica perfeitamente conservada em resina fóssil dourada e translúcida de árvores coníferas ancestrais.",
+            fossilType: "AMBER_INSECT",
+            color: "#ffaa00",
+            wearFactor: 0.1,
+            size: 1.1,
+            ridges: 10,
+            scientificFacts: [
+              "O âmbar é resina vegetal fossilizada, não seiva.",
+              "Preserva os tecidos moles e estruturas orgânicas tridimensionalmente.",
+              "A região do Báltico concentra os maiores depósitos mundiais.",
+              "Permite estudar as interações ecológicas de florestas tropicais extintas."
+            ],
+            fossilizationProcess: [
+              "O inseto ficou preso na resina fresca gotejante da árvore.",
+              "Camadas subsequentes envolveram-no totalmente vedando o oxigénio.",
+              "A resina caiu no solo e foi transportada por rios primitivos.",
+              "Endurecimento lento e polimerização química profunda.",
+              "As correntes marítimas libertaram o âmbar flutuante nas areias."
+            ],
+            curiosities: [
+              "Gerou o conceito do filme Parque Jurássico para extração de DNA.",
+              "A palavra grega para âmbar deu origem ao termo 'eletricidade'.",
+              "Pode conter bolhas de ar da atmosfera de há 40 milhões de anos."
+            ],
+            quizQuestions: [
+              {
+                question: "O que é cientificamente o âmbar?",
+                options: ["Seiva de conífera congelada", "Resina vegetal polimerizada", "Lava vulcânica endurecida", "Rocha metamórfica amarela"],
+                answerIndex: 1,
+                explanation: "O âmbar é resina vegetal que sofreu polimerização e soterramento por milhões de anos."
+              }
+            ]
+          };
+        }
+        // Generic Dinosaur Bone
+        return {
+          fossilName: fossilName.charAt(0).toUpperCase() + fossilName.slice(1),
+          geologicEra: "Mesozoico",
+          age: "145 milhões de anos (Jurássico)",
+          location: "Lourinhã, Portugal",
+          description: `Osso fóssil mineralizado que pertenceu a um exemplar de ${fossilName}. Revela poros osteológicos fundidos e perfeitamente preservados em argila siltosa.`,
+          fossilType: "DINOSAUR_BONE",
+          color: "#a8764e",
+          wearFactor: 0.25,
+          size: 1.2,
+          ridges: 16,
+          scientificFacts: [
+            "Os ossos fossilizam por permineralização substituindo células por minerais.",
+            "A Lourinhã é considerada das regiões mais ricas em dinossauros do Jurássico.",
+            "A espessura cortical revela padrões metabólicos e de crescimento rápido.",
+            "Frequentemente são descobertos dentes associados para identificar carnívoros."
+          ],
+          fossilizationProcess: [
+            "Morte do espécime em margens de rios aluviais jurássicos.",
+            "Soterramento rápido sob areias acumuladas em cheias.",
+            "Decomposição bacteriana de medula e tecidos conjuntivos.",
+            "Infiltração de sílica preenchendo as cavidades celulares vazias.",
+            "Dobramentos costeiros expuseram as ossadas nas arribas."
+          ],
+          curiosities: [
+            "O maior dinossauro português descoberto é o Lourinhasaurus.",
+            "Fósseis de ossos gigantes ditaram histórias de gigantes humanos na antiguidade.",
+            "Alguns ossos mineralizados adquirem magnetismo por conterem magnetite."
+          ],
+          quizQuestions: [
+            {
+              question: "Qual o nome do processo de substituição de células ósseas por minerais?",
+              options: ["Carbonização", "Permineralização", "Cristalização superficial", "Sublimação orgânica"],
+              answerIndex: 1,
+              explanation: "A permineralização infiltra águas ricas em minerais nos poros vazios do osso depositando minerais rígidos."
+            }
+          ]
+        };
+      }
+
+      // Initialize Firebase app safely
+      let db = null;
+      let auth = null;
+      let googleProvider = null;
+
+      try {
+        const app = firebase.initializeApp(firebaseConfig);
+        db = app.firestore(firebaseConfig.firestoreDatabaseId);
+        auth = firebase.auth();
+        googleProvider = new firebase.auth.GoogleAuthProvider();
+      } catch (e) {
+        console.warn("Firebase offline mode is active.", e);
+      }
+
+      // 1. Icon Wrapper Component for Lucide Icons
+      function Icon({ name, className = "w-4 h-4", ...props }) {
+        const ref = useRef(null);
+        useEffect(() => {
+          if (ref.current) {
+            ref.current.innerHTML = '';
+            const iconEl = document.createElement('i');
+            iconEl.setAttribute('data-lucide', name);
+            iconEl.className = className;
+            ref.current.appendChild(iconEl);
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+              window.lucide.createIcons();
+            }
+          }
+        }, [name, className]);
+        return <span ref={ref} className="inline-flex items-center justify-center" {...props} />;
+      }
+
+      // 2. 3D Procedural Canvas using Three.js UMD
+      function FossilCanvas3D({ fossilType, color, wearFactor, size, ridges, fossilName }) {
+        const mountRef = useRef(null);
+        const canvasRef = useRef(null);
+        const [lightMode, setLightMode] = useState('museum');
+        const [renderStyle, setRenderStyle] = useState('realistic');
+        const [showRuler, setShowRuler] = useState(false);
+        const [fissuresActive, setFissuresActive] = useState(false);
+        const [isRotating, setIsRotating] = useState(true);
+
+        const zoomFactorRef = useRef(1.0);
+        const rotationActiveRef = useRef(isRotating);
+
+        useEffect(() => {
+          rotationActiveRef.current = isRotating;
+        }, [isRotating]);
+
+        useEffect(() => {
+          const container = mountRef.current;
+          const canvas = canvasRef.current;
+          if (!container || !canvas) return;
+
+          const scene = new THREE.Scene();
+          scene.background = new THREE.Color(0x0f1110);
+
+          const w = container.clientWidth || 400;
+          const h = container.clientHeight || 340;
+          const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+          camera.position.set(0, 0, 8);
+
+          const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+          renderer.setSize(w, h);
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          renderer.shadowMap.enabled = true;
+
+          const lightGroup = new THREE.Group();
+          scene.add(lightGroup);
+
+          const updateLights = () => {
+            while(lightGroup.children.length > 0) lightGroup.remove(lightGroup.children[0]);
+            if (lightMode === 'museum') {
+              lightGroup.add(new THREE.AmbientLight(0x0b132b, 1.5));
+              const spot = new THREE.SpotLight(0xfff3e0, 18);
+              spot.position.set(3, 5, 4);
+              spot.angle = Math.PI / 6;
+              spot.castShadow = true;
+              lightGroup.add(spot);
+            } else if (lightMode === 'studio') {
+              lightGroup.add(new THREE.AmbientLight(0xffffff, 1.8));
+              const key = new THREE.DirectionalLight(0xffffff, 4.0);
+              key.position.set(5, 5, 5);
+              lightGroup.add(key);
+            } else {
+              lightGroup.add(new THREE.AmbientLight(0xdff0ff, 1.2));
+              const sun = new THREE.DirectionalLight(0xfffaed, 5.0);
+              sun.position.set(6, 8, 3);
+              lightGroup.add(sun);
+            }
+          };
+          updateLights();
+
+          const fossilGroup = new THREE.Group();
+          scene.add(fossilGroup);
+
+          const baseColor = new THREE.Color(color);
+          let mat;
+          if (renderStyle === 'wireframe') {
+            mat = new THREE.MeshBasicMaterial({ color: baseColor, wireframe: true });
+          } else if (renderStyle === 'xray') {
+            mat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x00a8cc, emissiveIntensity: 0.8, transparent: true, opacity: 0.5, wireframe: true, side: THREE.DoubleSide });
+          } else {
+            if (fossilType === 'AMBER_INSECT') {
+              mat = new THREE.MeshPhysicalMaterial({ color: 0xffaa00, roughness: 0.1, metalness: 0.1, transmission: 0.9, thickness: 1.5, ior: 1.5 });
+            } else {
+              mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.8 - wearFactor * 0.4, metalness: 0.1, flatShading: true });
+            }
+          }
+
+          const buildModel = () => {
+            const inner = new THREE.Group();
+            fossilGroup.add(inner);
+
+            if (fossilType === 'AMMONITE') {
+              const chambers = Math.round(ridges);
+              for (let i = 0; i < chambers; i++) {
+                const t = i / (chambers - 1);
+                const theta = t * Math.PI * 4.2;
+                const r = 0.08 * Math.exp(0.16 * theta);
+                const x = r * Math.cos(theta);
+                const y = r * Math.sin(theta);
+                const radius = 0.06 + r * 0.28;
+                const torus = new THREE.Mesh(new THREE.TorusGeometry(radius, radius * 0.45, 8, 16), mat);
+                torus.position.set(x, y, 0);
+                torus.rotation.z = theta + Math.PI / 2;
+                inner.add(torus);
+              }
+            } else if (fossilType === 'TRILOBITE') {
+              const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 12), mat);
+              head.scale.set(1.4, 0.8, 0.6);
+              head.position.set(0, 0.9, 0);
+              inner.add(head);
+
+              const segments = Math.round(ridges/2) + 4;
+              for (let i = 0; i < segments; i++) {
+                const ratio = i / (segments - 1);
+                const y = 0.4 - ratio * 1.5;
+                const wScale = 1.0 - ratio * 0.4;
+                const segment = new THREE.Mesh(new THREE.CylinderGeometry(0.2*wScale, 0.2*wScale, 0.12, 12), mat);
+                segment.rotation.x = Math.PI / 2;
+                segment.position.set(0, y, 0.1);
+                inner.add(segment);
+              }
+            } else if (fossilType === 'MEGALODON_TOOTH') {
+              const shape = new THREE.Shape();
+              shape.moveTo(-1.0, 0);
+              shape.bezierCurveTo(-0.8, 1.0, -0.3, 1.8, 0, 2.5);
+              shape.bezierCurveTo(0.3, 1.8, 0.8, 1.0, 1.0, 0);
+              shape.lineTo(0.9, -0.2);
+              shape.bezierCurveTo(0.5, -0.4, -0.5, -0.4, -0.9, -0.2);
+              const extrude = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.25, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05 }), mat);
+              extrude.center();
+              inner.add(extrude);
+            } else if (fossilType === 'LEAF_IMPRINT') {
+              const slab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.2, 0.2), renderStyle === 'realistic' ? new THREE.MeshStandardMaterial({ color: 0x766d62, roughness: 0.95 }) : mat);
+              inner.add(slab);
+              const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 8), mat);
+              stem.position.set(0, 0, 0.11);
+              inner.add(stem);
+            } else if (fossilType === 'AMBER_INSECT') {
+              const gem = new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 16), mat);
+              gem.scale.set(1.0, 1.3, 0.8);
+              inner.add(gem);
+              const bug = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshStandardMaterial({ color: 0x110d0a }));
+              bug.scale.set(0.6, 1.5, 0.6);
+              bug.position.set(0, 0, 0.1);
+              inner.add(bug);
+            } else {
+              const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 2.0, 12), mat);
+              inner.add(shaft);
+              const joint = new THREE.SphereGeometry(0.4, 12, 12);
+              const t1 = new THREE.Mesh(joint, mat); t1.position.set(-0.25, 1.0, 0); inner.add(t1);
+              const t2 = new THREE.Mesh(joint, mat); t2.position.set(0.25, 1.0, 0); inner.add(t2);
+              const b1 = new THREE.Mesh(joint, mat); b1.position.set(-0.25, -1.0, 0); inner.add(b1);
+              const b2 = new THREE.Mesh(joint, mat); b2.position.set(0.25, -1.0, 0); inner.add(b2);
+            }
+
+            inner.scale.set(size, size, size);
+          };
+          buildModel();
+
+          let isMouseDown = false;
+          let prevMouseX = 0, prevMouseY = 0;
+
+          const onDown = (e) => { isMouseDown = true; prevMouseX = e.clientX || e.touches[0].clientX; prevMouseY = e.clientY || e.touches[0].clientY; };
+          const onMove = (e) => {
+            if (!isMouseDown) return;
+            const cx = e.clientX || e.touches?.[0]?.clientX;
+            const cy = e.clientY || e.touches?.[0]?.clientY;
+            if (cx === undefined || cy === undefined) return;
+            const dx = cx - prevMouseX;
+            const dy = cy - prevMouseY;
+            prevMouseX = cx; prevMouseY = cy;
+            fossilGroup.rotation.y += dx * 0.01;
+            fossilGroup.rotation.x += dy * 0.01;
+          };
+          const onUp = () => { isMouseDown = false; };
+
+          canvas.addEventListener('mousedown', onDown);
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+          canvas.addEventListener('touchstart', onDown, { passive: true });
+          canvas.addEventListener('touchmove', onMove, { passive: true });
+          window.addEventListener('touchend', onUp);
+
+          let animId;
+          const clock = new THREE.Clock();
+          const animate = () => {
+            animId = requestAnimationFrame(animate);
+            const elapsed = clock.getElapsedTime();
+            if (rotationActiveRef.current && !isMouseDown) {
+              fossilGroup.rotation.y = elapsed * 0.2;
+              fossilGroup.position.y = Math.sin(elapsed * 1.5) * 0.1;
+            }
+            camera.position.z = THREE.MathUtils.lerp(camera.position.z, 8 / zoomFactorRef.current, 0.1);
+            renderer.render(scene, camera);
+          };
+          animate();
+
+          const observer = new ResizeObserver(() => {
+            const nw = container.clientWidth || 400;
+            const nh = container.clientHeight || 340;
+            camera.aspect = nw / nh;
+            camera.updateProjectionMatrix();
+            renderer.setSize(nw, nh);
+          });
+          observer.observe(container);
+
+          return () => {
+            cancelAnimationFrame(animId);
+            observer.disconnect();
+            canvas.removeEventListener('mousedown', onDown);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            canvas.removeEventListener('touchstart', onDown);
+            canvas.removeEventListener('touchmove', onMove);
+            window.removeEventListener('touchend', onUp);
+            renderer.dispose();
+          };
+        }, [fossilType, color, wearFactor, size, ridges, lightMode, renderStyle, showRuler, fissuresActive]);
+
+        return (
+          <div className="relative w-full h-full flex flex-col bg-[#0F1110] rounded-2xl overflow-hidden border border-[#C2A26E]/20 shadow-2xl group/canvas" id="canvas-container">
+            <div ref={mountRef} className="relative flex-grow w-full h-full min-h-[320px] cursor-grab active:cursor-grabbing">
+              <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" id="three-fossil-canvas" />
+              <div className="absolute top-4 left-4 bg-black/80 border border-gold/30 rounded-lg p-2.5">
+                <span className="text-[10px] font-mono text-gold block uppercase tracking-wider">Modo de Exploração</span>
+                <span className="text-sm font-serif italic text-white block">{fossilName}</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-[#141615] border-t border-gold/20 flex flex-wrap gap-2 items-center justify-between">
+              <div className="flex gap-1 bg-[#0F1110] rounded-lg p-1 border border-gold/15">
+                <button onClick={() => setLightMode('museum')} className={`p-1.5 rounded ${lightMode === 'museum' ? 'bg-gold/20 text-gold' : 'text-slate-500'}`} title="Luz Museu"><Icon name="lightbulb" /></button>
+                <button onClick={() => setLightMode('studio')} className={`p-1.5 rounded ${lightMode === 'studio' ? 'bg-gold/20 text-white' : 'text-slate-500'}`} title="Luz Estúdio"><Icon name="activity" /></button>
+              </div>
+
+              <div className="flex gap-1 bg-[#0F1110] rounded-lg p-1 border border-gold/15">
+                {['realistic', 'xray', 'wireframe'].map(st => (
+                  <button key={st} onClick={() => setRenderStyle(st)} className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded ${renderStyle === st ? 'bg-gold/20 text-gold' : 'text-slate-500'}`}>{st === 'realistic' ? 'Real' : st === 'xray' ? 'X-Ray' : 'Malha'}</button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button onClick={() => setIsRotating(!isRotating)} className={`p-1 rounded ${isRotating ? 'bg-gold/10 text-gold' : 'text-slate-500'}`}><Icon name="rotate-cw" /></button>
+                <button onClick={() => zoomFactorRef.current = Math.min(2.5, zoomFactorRef.current + 0.25)} className="p-1 rounded text-slate-400"><Icon name="zoom-in" /></button>
+                <button onClick={() => zoomFactorRef.current = Math.max(0.4, zoomFactorRef.current - 0.25)} className="p-1 rounded text-slate-400"><Icon name="zoom-out" /></button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // 3. Fossil Detailed Exploration & Student Quiz Sheet
+      function FossilDetailView({ fossil, onBack, onLike, isLikedByUser }) {
+        const [activeTab, setActiveTab] = useState('facts');
+        const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+        const [selectedAnswer, setSelectedAnswer] = useState(null);
+        const [quizScore, setQuizScore] = useState(0);
+        const [quizCompleted, setQuizCompleted] = useState(false);
+
+        const handleAnswer = (idx) => {
+          if (selectedAnswer !== null) return;
+          setSelectedAnswer(idx);
+          if (idx === fossil.quizQuestions[currentQuizIndex].answerIndex) setQuizScore(s => s + 1);
+        };
+
+        const handleNext = () => {
+          setSelectedAnswer(null);
+          if (currentQuizIndex < fossil.quizQuestions.length - 1) {
+            setCurrentQuizIndex(i => i + 1);
+          } else {
+            setQuizCompleted(true);
+          }
+        };
+
+        const resetQuiz = () => {
+          setCurrentQuizIndex(0);
+          setSelectedAnswer(null);
+          setQuizScore(0);
+          setQuizCompleted(false);
+        };
+
+        const quiz = fossil.quizQuestions || [];
+        const currentQ = quiz[currentQuizIndex];
+
+        return (
+          <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-6" id="fossil-detail-view-root">
+            <div className="flex items-center justify-between mb-6">
+              <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-xs font-mono font-bold uppercase border border-gold/30 rounded-xl hover:bg-gold/10 transition-colors">
+                <Icon name="arrow-left" /> Voltar ao Átrio
+              </button>
+              <span className="text-[10px] font-mono text-gold/60 uppercase">Espécime ID: {fossil.id}</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              <div className="lg:col-span-6 space-y-4">
+                <div className="aspect-[4/3] w-full min-h-[380px] rounded-2xl overflow-hidden border border-gold/20">
+                  <FossilCanvas3D fossilType={fossil.fossilType} color={fossil.color} wearFactor={fossil.wearFactor} size={fossil.size} ridges={fossil.ridges} fossilName={fossil.fossilName} />
+                </div>
+
+                <div className="bg-[#141615] border border-gold/20 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-serif font-semibold text-slate-200">Gostas deste projeto escolar?</h4>
+                    <p className="text-[9px] text-slate-500 font-mono">Dá apoio à turma {fossil.groupName}!</p>
+                  </div>
+                  <button onClick={() => onLike(fossil.id)} className={`flex items-center gap-1.5 px-4 py-2 text-xs font-mono uppercase rounded-xl border ${isLikedByUser ? 'bg-gold/20 border-gold text-gold' : 'bg-slate-900 border-gold/20 text-slate-300 hover:text-gold'}`}>
+                    <Icon name="thumbs-up" /> {fossil.likesCount} Gostos
+                  </button>
+                </div>
+              </div>
+
+              <div className="lg:col-span-6 space-y-6">
+                <div className="space-y-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono bg-gold/10 text-gold border border-gold/30">Era {fossil.geologicEra}</span>
+                  <h1 className="text-3xl font-serif italic text-white" id="fossil-detail-title">{fossil.fossilName}</h1>
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                    <span className="bg-[#141615] px-2.5 py-1 rounded border border-gold/10">Grupo: {fossil.groupName}</span>
+                    <span className="bg-[#141615] px-2.5 py-1 rounded border border-gold/10">Origem: {fossil.location}</span>
+                  </div>
+                </div>
+
+                <p className="p-4 bg-slate-950/40 border border-gold/10 rounded-2xl text-xs leading-relaxed text-slate-300">{fossil.description}</p>
+
+                <div className="border-b border-gold/10 flex overflow-x-auto text-xs font-mono gap-1">
+                  {['facts', 'process', 'curiosities', 'quiz'].map(t => (
+                    <button key={t} onClick={() => setActiveTab(t)} className={`px-3 py-2 border-b-2 uppercase font-bold tracking-wider ${activeTab === t ? 'border-gold text-gold bg-gold/5' : 'border-transparent text-slate-500'}`}>
+                      {t === 'facts' ? 'Ficha Científica' : t === 'process' ? 'Fossilização' : t === 'curiosities' ? 'Curiosidades' : `Quiz (${quiz.length})`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-[#141615] border border-gold/15 rounded-2xl p-5 min-h-[200px]">
+                  {activeTab === 'facts' && (
+                    <div className="space-y-3">
+                      <h3 className="font-serif italic text-slate-200">Factos Relevantes</h3>
+                      <ul className="space-y-2 text-xs text-slate-300">
+                        {fossil.scientificFacts?.map((f, i) => <li key={i} className="flex gap-2"><span className="text-gold">•</span><span>{f}</span></li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  {activeTab === 'process' && (
+                    <div className="space-y-3">
+                      <h3 className="font-serif italic text-slate-200">Etapas de Conservação</h3>
+                      <div className="space-y-3 border-l-2 border-gold/20 pl-4 ml-1">
+                        {fossil.fossilizationProcess?.map((p, i) => <div key={i} className="text-xs text-slate-300 relative"><span className="absolute -left-[22px] top-0.5 bg-gold text-black text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{i+1}</span>{p}</div>)}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'curiosities' && (
+                    <div className="space-y-3">
+                      <h3 className="font-serif italic text-slate-200">Sabias que...?</h3>
+                      <ul className="space-y-3 text-xs text-slate-300">
+                        {fossil.curiosities?.map((c, i) => <li key={i} className="bg-slate-900/60 p-3 rounded-lg border border-gold/10">{c}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  {activeTab === 'quiz' && (
+                    <div className="space-y-3">
+                      {quiz.length === 0 ? <p className="text-xs text-slate-500">Nenhum quiz configurado.</p> : quizCompleted ? (
+                        <div className="text-center py-4 space-y-3">
+                          <div className="w-12 h-12 bg-gold/10 border border-gold rounded-full flex items-center justify-center text-gold font-bold mx-auto">{quizScore}/{quiz.length}</div>
+                          <h4 className="text-sm font-serif italic text-slate-200">Quiz Completo!</h4>
+                          <button onClick={resetQuiz} className="px-4 py-1.5 border border-gold/30 hover:bg-gold/10 text-gold font-mono rounded-lg text-xs uppercase">Tentar De Novo</button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <p className="text-xs font-semibold bg-slate-900 p-3 rounded-xl border border-gold/10 text-slate-200">{currentQ.question}</p>
+                          <div className="grid grid-cols-1 gap-2">
+                            {currentQ.options.map((opt, oIdx) => {
+                              let btnBg = "bg-slate-900 border-gold/10 text-slate-300 hover:bg-slate-800";
+                              if (selectedAnswer !== null) {
+                                if (oIdx === currentQ.answerIndex) btnBg = "bg-emerald-950/40 border-emerald-500 text-emerald-400";
+                                else if (oIdx === selectedAnswer) btnBg = "bg-rose-950/40 border-rose-500 text-rose-400";
+                                else btnBg = "opacity-40 border-transparent text-slate-600";
+                              }
+                              return (
+                                <button key={oIdx} disabled={selectedAnswer !== null} onClick={() => handleAnswer(oIdx)} className={`w-full py-2 px-4 text-xs rounded-xl border text-left flex justify-between ${btnBg}`}>
+                                  <span>{String.fromCharCode(65 + oIdx)}. {opt}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {selectedAnswer !== null && (
+                            <div className="p-3 bg-slate-900 rounded-xl space-y-2 border border-gold/20 animate-fadeIn">
+                              <span className="text-[10px] font-mono text-gold uppercase">Explicação:</span>
+                              <p className="text-xs text-slate-300">{currentQ.explanation}</p>
+                              <button onClick={handleNext} className="ml-auto block px-4 py-1.5 bg-gold hover:bg-gold/80 text-black text-xs font-mono uppercase font-bold rounded-lg">Avançar</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // 4. Register Fossil Upload Curation Wizard
+      function AddFossilModal({ onClose, onSave }) {
+        const [step, setStep] = useState(1);
+        const [loadingAI, setLoadingAI] = useState(false);
+        const [aiMsg, setAiMsg] = useState(null);
+
+        // State
+        const [fossilName, setFossilName] = useState('');
+        const [groupName, setGroupName] = useState('');
+        const [geologicEra, setGeologicEra] = useState('Mesozoico');
+        const [age, setAge] = useState('');
+        const [location, setLocation] = useState('');
+        const [description, setDescription] = useState('');
+
+        const [fossilType, setFossilType] = useState('AMMONITE');
+        const [color, setColor] = useState('#8a8885');
+        const [wearFactor, setWearFactor] = useState(0.2);
+        const [size, setSize] = useState(1.0);
+        const [ridges, setRidges] = useState(16);
+
+        const [scientificFacts, setScientificFacts] = useState(['', '', '', '']);
+        const [fossilizationProcess, setFossilizationProcess] = useState(['', '', '', '', '']);
+        const [curiosities, setCuriosities] = useState(['', '', '']);
+
+        const [quizQuestions, setQuizQuestions] = useState([{ question: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' }]);
+
+        const triggerAI = async () => {
+          if (!fossilName.trim()) {
+            setAiMsg('Escreve o nome do fóssil para iniciarmos a curadoria!');
+            return;
+          }
+          setLoadingAI(true);
+          setAiMsg(null);
+          try {
+            const res = await fetch('/api/curate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fossilName })
+            });
+            if (!res.ok) throw new Error();
+            const d = await res.json();
+            setFossilName(d.fossilName || fossilName);
+            setGeologicEra(d.geologicEra || geologicEra);
+            setAge(d.age || '');
+            setLocation(d.location || '');
+            setDescription(d.description || '');
+            setFossilType(d.fossilType || 'AMMONITE');
+            setColor(d.color || '#8a8885');
+            if (d.scientificFacts) setScientificFacts(d.scientificFacts);
+            if (d.fossilizationProcess) setFossilizationProcess(d.fossilizationProcess);
+            if (d.curiosities) setCuriosities(d.curiosities);
+            if (d.quizQuestions) setQuizQuestions(d.quizQuestions);
+            setAiMsg('✨ Conteúdo gerado pela IA com sucesso!');
+          } catch {
+            // Local algorithmic fallback
+            const fallback = generateClientSideCuration(fossilName);
+            setFossilName(fallback.fossilName);
+            setGeologicEra(fallback.geologicEra);
+            setAge(fallback.age);
+            setLocation(fallback.location);
+            setDescription(fallback.description);
+            setFossilType(fallback.fossilType);
+            setColor(fallback.color);
+            setScientificFacts(fallback.scientificFacts);
+            setFossilizationProcess(fallback.fossilizationProcess);
+            setCuriosities(fallback.curiosities);
+            setQuizQuestions(fallback.quizQuestions);
+            setAiMsg('🤖 Preenchido via gerador científico do laboratório local!');
+          } finally {
+            setLoadingAI(false);
+          }
+        };
+
+        const handleSave = () => {
+          if (!fossilName || !groupName || !age || !location || !description) {
+            alert('Preenche os dados básicos do Passo 1!');
+            setStep(1);
+            return;
+          }
+          onSave({
+            fossilName, groupName, geologicEra, age, location, description,
+            fossilType, color, wearFactor, size, ridges,
+            scientificFacts: scientificFacts.filter(f => f.trim() !== ''),
+            fossilizationProcess: fossilizationProcess.filter(p => p.trim() !== ''),
+            curiosities: curiosities.filter(c => c.trim() !== ''),
+            quizQuestions: quizQuestions.filter(q => q.question.trim() !== '')
+          });
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-[#0F1110] border border-gold/30 rounded-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+              <div className="p-4 bg-[#141615] border-b border-gold/10 flex justify-between items-center">
+                <h3 className="text-base font-serif italic text-white flex items-center gap-2"><Icon name="sparkles" /> Laboratório de Curadoria Escolar</h3>
+                <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded text-slate-400"><Icon name="x" /></button>
+              </div>
+
+              <div className="flex bg-[#141615]/30 text-xs font-mono border-b border-gold/10 overflow-x-auto">
+                {[
+                  { s: 1, n: 'Campo' }, { s: 2, n: 'Investigação' }, { s: 3, n: 'Quiz' }, { s: 4, n: 'Escultura 3D' }
+                ].map(stepObj => (
+                  <button key={stepObj.s} onClick={() => setStep(stepObj.s)} className={`px-4 py-2 border-b-2 ${step === stepObj.s ? 'border-gold text-gold font-bold' : 'border-transparent text-slate-500'}`}>{stepObj.s}. {stepObj.n}</button>
+                ))}
+              </div>
+
+              <div className="flex-grow p-5 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-5 h-[300px] lg:h-full min-h-[250px] border border-gold/10 rounded-xl relative overflow-hidden bg-slate-950/20">
+                  <FossilCanvas3D fossilType={fossilType} color={color} wearFactor={wearFactor} size={size} ridges={ridges} fossilName={fossilName || "Sem Nome"} />
+                </div>
+
+                <div className="lg:col-span-7 overflow-y-auto space-y-4 max-h-[50vh] pr-1">
+                  {step === 1 && (
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="bg-slate-950/60 p-4 border border-gold/15 rounded-xl flex flex-col md:flex-row justify-between items-center gap-2">
+                        <div className="text-xs">
+                          <h4 className="font-bold text-gold">Paleontólogo Inteligente</h4>
+                          <p className="text-slate-400">Insere o nome de uma espécie e nós sugerimos os factos científicos e o quiz!</p>
+                        </div>
+                        <button type="button" onClick={triggerAI} disabled={loadingAI || !fossilName} className="px-4 py-2 bg-white hover:bg-gold disabled:bg-slate-800 disabled:text-slate-500 text-black font-mono font-bold uppercase rounded-lg text-xs">
+                          {loadingAI ? 'A Curar...' : 'Preencher IA'}
+                        </button>
+                      </div>
+
+                      {aiMsg && <div className="p-2 text-xs bg-gold/10 border border-gold/20 text-gold rounded-lg">{aiMsg}</div>}
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="block text-slate-400 mb-1">Nome do Fóssil *</label>
+                          <input type="text" placeholder="Ex: Amonite, T-Rex..." value={fossilName} onChange={e => setFossilName(e.target.value)} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-slate-200" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1">Turma / Grupo Escolar *</label>
+                          <input type="text" placeholder="Ex: Grupo 2 - 10ºB" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-slate-200" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="block text-slate-400 mb-1">Era Geológica</label>
+                          <select value={geologicEra} onChange={e => setGeologicEra(e.target.value)} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-slate-200">
+                            <option value="Paleozoico">Paleozoico</option>
+                            <option value="Mesozoico">Mesozoico</option>
+                            <option value="Cenozoico">Cenozoico</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1">Idade</label>
+                          <input type="text" placeholder="Ex: 115 M.A." value={age} onChange={e => setAge(e.target.value)} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-slate-200" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1">Local Descoberta</label>
+                          <input type="text" placeholder="Ex: Peniche" value={location} onChange={e => setLocation(e.target.value)} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-slate-200" />
+                        </div>
+                      </div>
+
+                      <div className="text-xs">
+                        <label className="block text-slate-400 mb-1">Resumo Curatorial *</label>
+                        <textarea rows={3} placeholder="Breve descrição da relevância geológica do espécime..." value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-slate-200" />
+                      </div>
+                    </div>
+                  )}
+
+                  {step === 2 && (
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="text-xs space-y-2">
+                        <span className="font-semibold text-gold">Factos Científicos</span>
+                        {scientificFacts.map((f, i) => (
+                          <input key={i} type="text" placeholder={`Facto ${i+1}`} value={f} onChange={e => { const updated=[...scientificFacts]; updated[i]=e.target.value; setScientificFacts(updated); }} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-xs text-slate-300" />
+                        ))}
+                      </div>
+
+                      <div className="text-xs space-y-2 pt-2">
+                        <span className="font-semibold text-gold">Processo Fossilização</span>
+                        {fossilizationProcess.map((p, i) => (
+                          <input key={i} type="text" placeholder={`Etapa ${i+1}`} value={p} onChange={e => { const updated=[...fossilizationProcess]; updated[i]=e.target.value; setFossilizationProcess(updated); }} className="w-full bg-slate-900 border border-gold/10 p-2 rounded text-xs text-slate-300" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {step === 3 && (
+                    <div className="space-y-4 animate-fadeIn">
+                      <span className="text-xs font-semibold text-gold block">Questão do Quiz</span>
+                      {quizQuestions.map((qq, qIdx) => (
+                        <div key={qIdx} className="bg-slate-900/60 p-4 rounded-lg border border-gold/10 space-y-3">
+                          <input type="text" placeholder="Qual a pergunta?" value={qq.question} onChange={e => { const updated=[...quizQuestions]; updated[qIdx].question=e.target.value; setQuizQuestions(updated); }} className="w-full bg-slate-950 border border-gold/10 p-2 rounded text-xs text-slate-200" />
+                          <div className="grid grid-cols-2 gap-2">
+                            {qq.options.map((opt, oIdx) => (
+                              <div key={oIdx} className="flex gap-1.5 items-center">
+                                <button type="button" onClick={() => { const updated=[...quizQuestions]; updated[qIdx].answerIndex=oIdx; setQuizQuestions(updated); }} className={`px-2 py-1 text-[10px] font-mono rounded ${qq.answerIndex === oIdx ? 'bg-gold text-black' : 'bg-slate-950 text-gold border border-gold/20'}`}>{String.fromCharCode(65 + oIdx)}</button>
+                                <input type="text" placeholder="Opção" value={opt} onChange={e => { const updated=[...quizQuestions]; updated[qIdx].options[oIdx]=e.target.value; setQuizQuestions(updated); }} className="flex-grow bg-slate-950 border border-gold/10 p-1 rounded text-xs text-slate-300" />
+                              </div>
+                            ))}
+                          </div>
+                          <input type="text" placeholder="Explicação Científica" value={qq.explanation} onChange={e => { const updated=[...quizQuestions]; updated[qIdx].explanation=e.target.value; setQuizQuestions(updated); }} className="w-full bg-slate-950 border border-gold/10 p-1.5 rounded text-xs text-slate-300" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {step === 4 && (
+                    <div className="space-y-4 animate-fadeIn text-xs">
+                      <div>
+                        <label className="block text-slate-400 mb-1">Geometria Fóssil</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {['AMMONITE', 'TRILOBITE', 'MEGALODON_TOOTH', 'LEAF_IMPRINT', 'AMBER_INSECT', 'DINOSAUR_BONE'].map(t => (
+                            <button key={t} type="button" onClick={() => setFossilType(t)} className={`p-2 rounded border text-[10px] uppercase font-mono ${fossilType === t ? 'bg-gold/15 border-gold text-gold' : 'bg-slate-900 border-gold/10 text-slate-500'}`}>{t.replace('_', ' ')}</button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <div>
+                          <label className="block text-slate-400 mb-1">Cor</label>
+                          <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-full h-8 bg-transparent border-0 cursor-pointer p-0" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1">Erosão/Desgaste ({(wearFactor*100).toFixed(0)}%)</label>
+                          <input type="range" min="0" max="1" step="0.1" value={wearFactor} onChange={e => setWearFactor(parseFloat(e.target.value))} className="w-full h-2 bg-slate-900 rounded cursor-pointer" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1">Tamanho ({size.toFixed(1)}x)</label>
+                          <input type="range" min="0.5" max="2" step="0.1" value={size} onChange={e => setSize(parseFloat(e.target.value))} className="w-full h-2 bg-slate-900 rounded cursor-pointer" />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1">Segmentação ({ridges})</label>
+                          <input type="range" min="6" max="36" step="2" value={ridges} onChange={e => setRidges(parseInt(e.target.value))} className="w-full h-2 bg-slate-900 rounded cursor-pointer" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 bg-[#141615] border-t border-gold/10 flex justify-between">
+                <button disabled={step === 1} onClick={() => setStep(step - 1)} className="px-4 py-2 border border-gold/30 rounded-lg text-xs text-slate-300 disabled:opacity-30">Anterior</button>
+                <div className="flex gap-2">
+                  <button onClick={onClose} className="px-4 py-2 text-slate-400 text-xs">Cancelar</button>
+                  {step < 4 ? (
+                    <button onClick={() => setStep(step + 1)} className="px-4 py-2 bg-slate-900 border border-gold/30 text-white text-xs rounded-lg">Seguinte</button>
+                  ) : (
+                    <button onClick={handleSave} className="px-6 py-2 bg-white hover:bg-gold text-black text-xs rounded-lg font-bold">Publicar Obra</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // 5. Main Museum Portal/Lobby
+      function MuseumAtrium({ exhibits, onSelect, onOpenAdd, user, onGoogleSignIn, onGuestSignIn, onSignOut }) {
+        const [search, setSearch] = useState('');
+        const [eraFilter, setEraFilter] = useState('all');
+        const [sort, setSort] = useState('newest');
+        const [guestName, setGuestName] = useState('');
+        const [showGuest, setShowGuest] = useState(false);
+
+        const filtered = useMemo(() => {
+          return exhibits
+            .filter(ex => {
+              const matchText = ex.fossilName.toLowerCase().includes(search.toLowerCase()) || ex.groupName.toLowerCase().includes(search.toLowerCase());
+              const matchEra = eraFilter === 'all' || ex.geologicEra === eraFilter;
+              return matchText && matchEra;
+            })
+            .sort((a, b) => {
+              if (sort === 'popular') return b.likesCount - a.likesCount;
+              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            });
+        }, [exhibits, search, eraFilter, sort]);
+
+        const totalSpecimens = exhibits.length;
+        const totalLikes = exhibits.reduce((sum, curr) => sum + curr.likesCount, 0);
+        const distinctGroups = new Set(exhibits.map(ex => ex.groupName)).size;
+
+        return (
+          <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-6 animate-fadeIn" id="museum-atrium-root">
+            <div className="relative rounded-2xl overflow-hidden border border-gold/20 bg-gradient-to-br from-[#141615] to-[#1a1c1b] p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6" id="museum-hero-banner">
+              <div className="space-y-3 max-w-xl text-center md:text-left z-10">
+                <span className="inline-flex gap-1 bg-gold/10 border border-gold/30 text-[10px] font-mono text-gold px-3 py-0.5 rounded-full uppercase tracking-wider"><Icon name="landmark" /> Galeria Paleontológica</span>
+                <h1 className="text-2xl md:text-4xl font-serif italic text-white leading-none">Museu Virtual <span className="bg-gradient-to-r from-gold via-amber-100 to-gold bg-clip-text text-transparent not-italic font-bold">dos Fósseis</span></h1>
+                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Explora alguns fósseis criados em 3D e curados por equipas de estudantes de Ciências Naturais! Analisa factos científicos, responde aos testes práticos e regista a tua descoberta!</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 w-full md:w-auto max-w-sm z-10 font-mono text-center">
+                <div className="p-3 bg-[#1A1C1B] border border-gold/20 rounded-xl"><span className="text-[9px] text-gold/60 block uppercase">Espécimes</span><span className="text-lg font-serif font-bold text-gold block">{totalSpecimens}</span></div>
+                <div className="p-3 bg-[#1A1C1B] border border-gold/20 rounded-xl"><span className="text-[9px] text-gold/60 block uppercase">Incentivos</span><span className="text-lg font-serif font-bold text-gold block">{totalLikes}</span></div>
+                <div className="p-3 bg-[#1A1C1B] border border-gold/20 rounded-xl"><span className="text-[9px] text-gold/60 block uppercase">Escolas</span><span className="text-lg font-serif font-bold text-gold block">{distinctGroups}</span></div>
+              </div>
+            </div>
+
+            <div className="bg-[#141615] border border-gold/20 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md" id="museum-curator-auth-panel">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#1A1C1B] border border-gold flex items-center justify-center text-gold text-xs font-bold uppercase">{user.displayName?.substring(0, 2)}</div>
+                  <div className="text-left">
+                    <span className="text-[9px] text-gold/70 block uppercase">Investigador</span>
+                    <span className="text-xs font-semibold text-slate-200 block">{user.displayName}</span>
+                  </div>
+                  <button onClick={onSignOut} className="text-[10px] font-mono text-rose-400 hover:text-rose-300 underline uppercase tracking-wider">Sair</button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="text-left text-xs mr-2">
+                    <span className="font-semibold text-slate-200 block">Desejas expor um fóssil neste panteão?</span>
+                    <span className="text-[10px] text-slate-500 font-mono block">Identifica a tua turma para carregar o teu projeto:</span>
+                  </div>
+                  {showGuest ? (
+                    <form onSubmit={e => { e.preventDefault(); if (guestName.trim()) { onGuestSignIn(guestName.trim()); setShowGuest(false); } }} className="flex items-center gap-1">
+                      <input type="text" placeholder="Ex: Turma 7A" value={guestName} onChange={e => setGuestName(e.target.value)} className="px-2 py-1 bg-slate-900 border border-gold/20 rounded text-xs text-white" />
+                      <button type="submit" className="px-3 py-1 bg-white text-black text-xs rounded">Entrar</button>
+                    </form>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={onGoogleSignIn} className="px-3 py-1.5 bg-[#1A1C1B] border border-gold/20 hover:bg-gold/10 text-xs font-mono text-slate-200 rounded flex items-center gap-1"><Icon name="log-in" /> Google</button>
+                      <button onClick={() => setShowGuest(true)} className="px-3 py-1.5 bg-[#1A1C1B] border border-gold/20 hover:bg-gold/10 text-xs font-mono text-slate-200 rounded flex items-center gap-1"><Icon name="school" /> Turma</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={onOpenAdd} className="w-full md:w-auto px-6 py-2.5 bg-white hover:bg-gold text-black font-bold font-mono uppercase rounded-lg text-xs flex items-center justify-center gap-1 shadow-md">
+                <Icon name="plus" /> Carregar Projeto
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-[#141615]/50 p-4 border border-gold/15 rounded-xl" id="museum-filters-container">
+              <div className="relative w-full md:w-72">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gold/60"><Icon name="search" /></span>
+                <input type="text" placeholder="Procurar espécimes..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-1.5 bg-[#0F1110] border border-gold/20 rounded-lg text-xs text-white placeholder-slate-600 focus:outline-none" />
+              </div>
+
+              <div className="flex overflow-x-auto gap-1 text-xs font-mono">
+                {['all', 'Paleozoico', 'Mesozoico', 'Cenozoico'].map(era => (
+                  <button key={era} onClick={() => setEraFilter(era)} className={`px-2.5 py-1 rounded-lg ${eraFilter === era ? 'bg-gold/20 text-gold font-bold border border-gold/30' : 'text-slate-400 hover:text-slate-200'}`}>
+                    {era === 'all' ? 'Todos' : era}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 text-xs font-mono">
+                <button onClick={() => setSort('newest')} className={`flex items-center gap-1 ${sort === 'newest' ? 'text-gold font-bold' : 'text-slate-500'}`}><Icon name="calendar" /> Recentes</button>
+                <button onClick={() => setSort('popular')} className={`flex items-center gap-1 ${sort === 'popular' ? 'text-gold font-bold' : 'text-slate-500'}`}><Icon name="trending-up" /> Populares</button>
+              </div>
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="text-center py-12 border border-gold/10 rounded-xl bg-[#141615]">
+                <Icon name="compass" className="w-10 h-10 text-gold/30 mx-auto mb-2 animate-spin" />
+                <p className="text-xs text-slate-400">Nenhum espécime encontrado.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="exhibition-cards-grid">
+                {filtered.map(ex => (
+                  <div key={ex.id} onClick={() => onSelect(ex)} className="group border border-gold/15 hover:border-gold/40 rounded-xl bg-[#141615] overflow-hidden flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer duration-200">
+                    <div className="h-40 bg-[#0F1110] relative flex items-center justify-center p-4 border-b border-gold/10">
+                      <div className="absolute top-3 left-3"><span className="px-2 py-0.5 text-[9px] font-mono bg-gold/10 text-gold border border-gold/20 rounded">{ex.geologicEra}</span></div>
+                      <div className="absolute top-3 right-3 text-[10px] font-mono text-slate-300 flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded-full"><Icon name="thumbs-up" className="w-3 h-3 text-gold" /> {ex.likesCount}</div>
+                      <span className="text-5xl drop-shadow-[0_0_12px_rgba(194,162,110,0.3)] filter transform transition-transform group-hover:scale-110">
+                        {ex.fossilType === 'AMMONITE' && '🐚'}
+                        {ex.fossilType === 'TRILOBITE' && '🐜'}
+                        {ex.fossilType === 'MEGALODON_TOOTH' && '🦷'}
+                        {ex.fossilType === 'LEAF_IMPRINT' && '🌿'}
+                        {ex.fossilType === 'AMBER_INSECT' && '💎'}
+                        {ex.fossilType === 'DINOSAUR_BONE' && '🦴'}
+                      </span>
+                    </div>
+
+                    <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                      <div>
+                        <h3 className="text-sm font-serif italic text-white group-hover:text-gold transition-colors">{ex.fossilName}</h3>
+                        <p className="text-slate-400 text-xs line-clamp-2 mt-1">{ex.description}</p>
+                      </div>
+                      <div className="border-t border-gold/10 pt-2 flex justify-between text-[10px] text-slate-500 font-mono">
+                        <span className="text-slate-300">Turma: {ex.groupName}</span>
+                        <span>{ex.location.split(',')[0]}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 6. Global Main Orchestration Shell
+      function App() {
+        const [exhibits, setExhibits] = useState([]);
+        const [selected, setSelected] = useState(null);
+        const [showAdd, setShowAdd] = useState(false);
+        const [user, setUser] = useState(null);
+        const [likedExhibits, setLikedExhibits] = useState([]);
+
+        useEffect(() => {
+          // Sync auth state
+          if (auth) {
+            auth.onAuthStateChanged(fu => {
+              if (fu) {
+                setUser({ uid: fu.uid, displayName: fu.displayName || 'Estudante', photoURL: fu.photoURL });
+              } else {
+                const storedGuest = localStorage.getItem('museum_guest_username');
+                const storedUid = localStorage.getItem('museum_guest_uid');
+                if (storedGuest && storedUid) setUser({ uid: storedUid, displayName: storedGuest });
+                else setUser(null);
+              }
+            });
+          }
+
+          // Fetch liked exhibits list
+          const l = localStorage.getItem('museum_liked_ids');
+          if (l) setLikedExhibits(JSON.parse(l));
+
+          // Sync database Real-Time
+          if (db) {
+            db.collection('exhibits').onSnapshot(snap => {
+              if (snap.empty) {
+                PRELOADED_EXHIBITS.forEach(ex => db.collection('exhibits').doc(ex.id).set(ex));
+                setExhibits(PRELOADED_EXHIBITS);
+              } else {
+                const list = [];
+                snap.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+                setExhibits(list);
+              }
+            }, () => loadLocal());
+          } else {
+            loadLocal();
+          }
+        }, []);
+
+        const loadLocal = () => {
+          const stored = localStorage.getItem('museum_local_exhibits');
+          if (stored) {
+            setExhibits(JSON.parse(stored));
+          } else {
+            setExhibits(PRELOADED_EXHIBITS);
+            localStorage.setItem('museum_local_exhibits', JSON.stringify(PRELOADED_EXHIBITS));
+          }
+        };
+
+        const handleSaveLocal = (list) => {
+          setExhibits(list);
+          localStorage.setItem('museum_local_exhibits', JSON.stringify(list));
+        };
+
+        const handleGoogleSignIn = async () => {
+          if (!auth) return;
+          try {
+            const res = await auth.signInWithPopup(googleProvider);
+            if (res.user) {
+              localStorage.removeItem('museum_guest_username');
+              localStorage.removeItem('museum_guest_uid');
+            }
+          } catch {
+            alert('Falha ao entrar com conta Google. Usa Identificar Turma!');
+          }
+        };
+
+        const handleGuestSignIn = (name) => {
+          const uid = 'guest-' + Math.random().toString(36).substring(2, 9);
+          localStorage.setItem('museum_guest_username', name);
+          localStorage.setItem('museum_guest_uid', uid);
+          setUser({ uid, displayName: name });
+        };
+
+        const handleSignOut = () => {
+          if (auth) auth.signOut();
+          localStorage.removeItem('museum_guest_username');
+          localStorage.removeItem('museum_guest_uid');
+          setUser(null);
+        };
+
+        const handleSaveFossil = async (newFossil) => {
+          const complete = {
+            ...newFossil,
+            likesCount: 0,
+            createdBy: user ? user.uid : 'anonymous',
+            createdAt: new Date().toISOString()
+          };
+          if (db) {
+            try {
+              await db.collection('exhibits').add(complete);
+            } catch {
+              const updated = [...exhibits, { id: 'local-' + Date.now(), ...complete }];
+              handleSaveLocal(updated);
+            }
+          } else {
+            const updated = [...exhibits, { id: 'local-' + Date.now(), ...complete }];
+            handleSaveLocal(updated);
+          }
+          setShowAdd(false);
+        };
+
+        const handleLike = async (id) => {
+          if (likedExhibits.includes(id)) return;
+          const updatedLikes = [...likedExhibits, id];
+          setLikedExhibits(updatedLikes);
+          localStorage.setItem('museum_liked_ids', JSON.stringify(updatedLikes));
+
+          if (db) {
+            try {
+              await db.collection('exhibits').doc(id).update({ likesCount: firebase.firestore.FieldValue.increment(1) });
+            } catch {
+              updateLocalLike(id);
+            }
+          } else {
+            updateLocalLike(id);
+          }
+        };
+
+        const updateLocalLike = (id) => {
+          const updated = exhibits.map(ex => ex.id === id ? { ...ex, likesCount: ex.likesCount + 1 } : ex);
+          handleSaveLocal(updated);
+          if (selected && selected.id === id) {
+            setSelected(curr => ({ ...curr, likesCount: curr.likesCount + 1 }));
+          }
+        };
+
+        return (
+          <div id="app-container" className="min-h-screen flex flex-col justify-between">
+            <header id="app-header" class="border-b border-gold/20 bg-[#141615] py-4 px-6 shadow-md">
+              <div class="max-w-7xl mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <Icon name="landmark" className="w-5 h-5 text-gold" />
+                  <div>
+                    <h1 class="text-base font-serif italic text-white leading-none">Exposição interativa</h1>
+                    <span class="text-[9px] font-mono text-gold/60 uppercase block tracking-widest mt-1">Plataforma virtual de Paleontologia - 2026</span>
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <main class="flex-grow py-4">
+              {selected ? (
+                <FossilDetailView fossil={selected} onBack={() => setSelected(null)} onLike={handleLike} isLikedByUser={likedExhibits.includes(selected.id)} />
+              ) : (
+                <MuseumAtrium exhibits={exhibits} onSelect={setSelected} onOpenAdd={() => { if (!user) alert('Identifica o teu grupo escolar primeiro!'); else setShowAdd(true); }} user={user} onGoogleSignIn={handleGoogleSignIn} onGuestSignIn={handleGuestSignIn} onSignOut={handleSignOut} />
+              )}
+            </main>
+
+            <footer id="app-footer" class="border-t border-gold/15 bg-[#141615]/50 py-4 px-6 text-center shadow-inner">
+              <span class="text-[9px] font-mono text-slate-500 uppercase tracking-widest">Plataforma virtual de Paleontologia - 2026</span>
+            </footer>
+
+            {showAdd && <AddFossilModal onClose={() => setShowAdd(false)} onSave={handleSaveFossil} />}
+          </div>
+        );
+      }
+
+      // Render App
+      const r = ReactDOM.createRoot(document.getElementById('root'));
+      r.render(<App />);
+    </script>
   </body>
 </html>
-
