@@ -12,9 +12,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <!-- Firebase compatibility scripts are removed to use modern modular SDK and prevent default database connection errors -->
 
     <script>
       tailwind.config = {
@@ -63,7 +61,11 @@
   <body class="min-h-screen bg-[#0f1110] selection:bg-[#c2a26e]/30 selection:text-white">
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-type="module">
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+      import { initializeFirestore, collection, onSnapshot, doc, setDoc, addDoc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+      import { getAuth, onAuthStateChanged, signInWithPopup, signOut, GoogleAuthProvider } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
       const { useState, useEffect, useRef, useMemo } = React;
 
       // Firebase Config
@@ -309,10 +311,10 @@
       let googleProvider = null;
 
       try {
-        const app = firebase.initializeApp(firebaseConfig);
-        db = app.firestore(firebaseConfig.firestoreDatabaseId);
-        auth = firebase.auth();
-        googleProvider = new firebase.auth.GoogleAuthProvider();
+        const app = initializeApp(firebaseConfig);
+        db = initializeFirestore(app, {}, firebaseConfig.firestoreDatabaseId);
+        auth = getAuth(app);
+        googleProvider = new GoogleAuthProvider();
       } catch (e) {
         console.warn("Firebase offline mode is active.", e);
       }
@@ -1128,7 +1130,7 @@
         useEffect(() => {
           // Sync auth state
           if (auth) {
-            auth.onAuthStateChanged(fu => {
+            onAuthStateChanged(auth, fu => {
               if (fu) {
                 setUser({ uid: fu.uid, displayName: fu.displayName || 'Estudante', photoURL: fu.photoURL });
               } else {
@@ -1146,9 +1148,15 @@
 
           // Sync database Real-Time
           if (db) {
-            db.collection('exhibits').onSnapshot(snap => {
+            onSnapshot(collection(db, 'exhibits'), snap => {
               if (snap.empty) {
-                PRELOADED_EXHIBITS.forEach(ex => db.collection('exhibits').doc(ex.id).set(ex));
+                PRELOADED_EXHIBITS.forEach(async (ex) => {
+                  try {
+                    await setDoc(doc(db, 'exhibits', ex.id), ex);
+                  } catch (e) {
+                    console.error("Error setting seed document: ", e);
+                  }
+                });
                 setExhibits(PRELOADED_EXHIBITS);
               } else {
                 const list = [];
@@ -1179,7 +1187,7 @@
         const handleGoogleSignIn = async () => {
           if (!auth) return;
           try {
-            const res = await auth.signInWithPopup(googleProvider);
+            const res = await signInWithPopup(auth, googleProvider);
             if (res.user) {
               localStorage.removeItem('museum_guest_username');
               localStorage.removeItem('museum_guest_uid');
@@ -1197,7 +1205,7 @@
         };
 
         const handleSignOut = () => {
-          if (auth) auth.signOut();
+          if (auth) signOut(auth);
           localStorage.removeItem('museum_guest_username');
           localStorage.removeItem('museum_guest_uid');
           setUser(null);
@@ -1212,8 +1220,9 @@
           };
           if (db) {
             try {
-              await db.collection('exhibits').add(complete);
-            } catch {
+              await addDoc(collection(db, 'exhibits'), complete);
+            } catch (e) {
+              console.error("Failed to save to Firestore:", e);
               const updated = [...exhibits, { id: 'local-' + Date.now(), ...complete }];
               handleSaveLocal(updated);
             }
@@ -1232,8 +1241,9 @@
 
           if (db) {
             try {
-              await db.collection('exhibits').doc(id).update({ likesCount: firebase.firestore.FieldValue.increment(1) });
-            } catch {
+              await updateDoc(doc(db, 'exhibits', id), { likesCount: increment(1) });
+            } catch (e) {
+              console.error("Failed to update like count in Firestore:", e);
               updateLocalLike(id);
             }
           } else {
